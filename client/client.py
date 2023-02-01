@@ -1,15 +1,228 @@
+import tkinter
 import socket
+import time
+from ctypes import *
 import sys
 import random
-from ctypes import *
-import time
-import tkinter
 import keyboard
 
+from functools import partial
+
+# Bingo:
+CANVAS_WIDTH = 5  # Width of drawing canvas in pixels
+CANVAS_HEIGHT = 5  # Height of drawing canvas in pixels
+
+class BingoCanvas:
+    """
+    Creates a canvas and contains attributes for all the objects on the Canvas.
+    The methods in it handle everything for the game right from instantiating the board, score_board to
+     processing events happening during the game
+    """
+    def __init__(self, top):
+        #self.top = top
+        #self.canvas = self.make_canvas(CANVAS_WIDTH, CANVAS_HEIGHT, 'Bingo Game')
+        self.screen = top
+        self.start_game()
+
+    def make_canvas(self, width, height, title):
+        """
+        Method to create a canvas that acts as a base for all the objects in the game
+        """
+        self.top.minsize(width=width, height=height)
+        self.top.title(title)
+
+        canvas = tkinter.Canvas(self.top, width=width + 1, height=height + 1, bg='black')
+        canvas.pack(padx=10, pady=10)
+        return canvas
+    def make_grid(self):
+        def on_click(value):
+            print()
+            self.write_server_int(value)
+            self.wait = False
+        self.label = tkinter.Label(width=52,height=2,text="Wait for other turn,...",bg='grey', fg='white')
+        self.label.grid(row=5,columnspan=5)
+        self.grids = [None] * 25
+        for i in range(25):
+            self.grids[i] = tkinter.Button(
+                                height = 2, width = 4,
+                                font = ("Helvetica","20"),
+                                text = self.board[i],
+                                command = lambda  value = self.board[i] : on_click(value))
+            row = int(i%5)
+            column =  int(i/5)
+            self.grids[i].grid(row = row, column = column)
+    def recv_board(self):
+        msg = self.s.recv(sizeof(c_int) * 50)
+        self.board = []
+        for i in range(0, len(msg), 4):
+            self.board.append(int.from_bytes(bytes(msg[i:i+2]), 'little'))
+        #for i in range(sizeof(c_int) * 50):
+        #    if i % 3 == 0:
+        #        self.board.append(msg[i])
+        #self.board = [x for x in msg]
+        print(self.board)
+    def draw_board(self):
+        for i in range(25):
+            if i != 0 and i % 5 == 0:
+                print("\n------------------------\n", end =" ")
+                print("| {} |".format(self.board[i]),  end =" ")
+            else:
+                print("| {} |".format(self.board[i]),  end =" ")
+            self.grids[i].configure(state = tkinter.DISABLED)
+            if self.board[i] == 65535:
+                self.grids[i].configure(bg = 'red')
+        self.screen.update()
+        print("\n")
+
+    def starter_message(self):
+        self.display_label('Welcome to the Bingo World!', 3)
+        self.display_label('Your game starts in \n 3', 1)
+        self.display_label('Your game starts in \n 2', 1)
+        self.display_label('Your game starts in \n 1', 1)
+
+    def open_socket(self, serv_addr ,port):
+        server_addr = (serv_addr, port)
+        sockfd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        return server_addr, sockfd
+
+    def recv_int(self):
+        msg = self.s.recv(sizeof(c_int))
+        int_value = int.from_bytes(msg, "little")
+        print("[DEBUG] Received int: {}\n".format(int_value))
+
+        return int_value
+
+    def recv_msg(self):
+        msg = self.s.recv(sizeof(c_char) * 3)
+        print(msg)
+        msg = msg.decode("utf-8")
+        print("[DEBUG] Received msg: {}\n".format(msg))
+        return msg
+
+    def write_server_int(self, msg):
+        nsent = self.s.send(c_int(msg))
+        # Alternative: s.sendall(...): coontinues to send data until either
+        # all data has been sent or an error occurs. No return value.
+        print("Sent {:d} bytes".format(nsent))
+        print("[DEBUG] Wrote int to server: {}\n".format(msg))
+
+
+    def update_gameState(self, signal):
+        self.food_x, self.food_y, self.snake0.snake_size_counter, self.snake1.snake_size_counter, self.snake0.score_counter, self.snake1.score_counter, self.snake0.is_alive,  self.snake1.is_alive, self.is_col = self.sendCollision(signal)
+
+    def get_update(self):
+        player_id = self.recv_int()
+        self.recv_board()
+
+    def take_turn(self):
+        self.wait = True
+        while self.wait:
+            pass
+
+    def click_enable(self):
+        self.wait = True
+        self.label.configure(text="Your turn")
+        while self.wait:
+            for i in range(25):
+                self.grids[i].configure(state = tkinter.NORMAL)
+                if self.board[i] == 65535:
+                    self.grids[i].configure(bg = 'red')
+                    self.grids[i].configure(state = tkinter.DISABLED)
+            self.screen.update()
+
+    def start_game(self):
+        """
+        The heart of the game : the 'while True' animation loop
+        Keeps moving the snake and updating the canvas.
+        Checks for events like hit food/self/other snake/wall to keep updating snake size/scores, etc
+        until game is over
+        """
+        #
+        #receive intial state of the game
+        server_addr, self.s = self.open_socket('localhost', 2301)
+        try:
+            self.s.connect(server_addr)
+            print("Connected to {:s}".format(repr(server_addr)))
+            print("")
+            self.id = self.recv_int()
+
+            #wait for the start signal
+            #msg = self.s.recv(4)
+            #print("Let's the game begin!!!")
+            msg = self.recv_msg()
+            if msg == "HLD":
+                print("Waiting for other player")
+            while msg != "SRT":
+                msg = self.recv_msg()
+                if msg == "HLD":
+                    print("Waiting for other player")
+
+            print("Game on!\n")
+            print("Your are {}s\n".format(self.id))
+            self.screen.title("Player " + str(self.id))
+            #self.starter_message()
+            # The first food is placed outside the loop to kick start the game
+            # Animation Loop
+            self.recv_board()
+            self.make_grid()
+            self.draw_board()
+            def on_closing():
+                global running
+                running = False
+                self.screen.destroy()
+
+            self.screen.protocol("WM_DELETE_WINDOW", on_closing)
+            running = True
+            while running:
+                msg = self.recv_msg()
+                if msg == "TRN":
+                    print("Your move...\n")
+                    time.sleep(1)
+                    self.click_enable()
+                elif msg == "INV":
+                    print("That position has already been played. Try again.\n")
+                elif msg == "CNT":
+                    num_players = self.recv_int
+                    print("There are currently %d active players.\n", num_players)
+                elif msg == "UPD":
+                    self.get_update()
+                    self.draw_board()
+                elif msg == "WAT":
+                    print("Waiting for other players move...\n")
+                    self.label.configure(text="Wait for other turn,...")
+                    self.draw_board()
+                elif msg == "WIN":
+                    print("You win!\n")
+                    self.label.configure(text="You win")
+                    self.draw_board()
+                    break
+                elif msg == "LSE":
+                    print("You lose.\n")
+                    self.label.configure(text="You lost")
+                    self.draw_board()
+                    break
+                elif msg == "DRW":
+                    print("Draw.\n")
+                    break
+                else:
+                    print("Unknown message")
+        except AttributeError as ae:
+            print("Error creating the socket: {}".format(ae))
+        except socket.error as se:
+            print("Exception on socket: {}".format(se))
+        finally:
+            print("Closing socket")
+            self.s.close()
+
+def playBingo(game_board):
+    BingoCanvas(game_board)
+    game_board.mainloop()
+ # =====================================
+# Snake
 CANVAS_WIDTH = 600  # Width of drawing canvas in pixels
 CANVAS_HEIGHT = 600  # Height of drawing canvas in pixels
 UNIT_SIZE = 10  # Decides how thick the snake is
-SPEED = 10  # Greater value here increases the speed of motion of the snakes
+SPEED = 5  # Greater value here increases the speed of motion of the snakes
 
 """ This class defines a C-like struct """
 class IntialData(Structure):
@@ -39,7 +252,7 @@ class GameState(Structure):
                 ("counter1", c_int32),
                 ("score0", c_int16),
                 ("score1", c_int16),
-                ("is_alive0", c_int8),              
+                ("is_alive0", c_int8),
                 ("is_alive1", c_int8),
                 ("is_col", c_int8)]
 class Snake:
@@ -96,7 +309,7 @@ class Snake:
 
     '''
      move_* methods below control the snake's navigation. These functions are invoked based on user's key presses.
-     Special checks are done in each of them to ensure invalid turns are blocked 
+     Special checks are done in each of them to ensure invalid turns are blocked
      (Ex: Block right turn if the snake is currently going to the left, and so on)
     '''
     def move_up(self):
@@ -168,7 +381,7 @@ class Snake:
             self.canvas.move(snake_head_tag, self.direction_x * UNIT_SIZE, self.direction_y * UNIT_SIZE)
 
             '''
-            ASSUMPTION : Object IDs are maintained in a sorted list assuming that 
+            ASSUMPTION : Object IDs are maintained in a sorted list assuming that
             the IDs are assigned in increasing order for new objects instantiated on Canvas
             '''
             key_list = sorted(chain_pos_dict.keys())
@@ -180,7 +393,7 @@ class Snake:
     def get_head_tag(self):
         return 'snake_' + str(self.snake_num) + '&&head'
 
-class TkinkerCanvas:
+class SnakeCanvas:
     """
     Creates a canvas and contains attributes for all the objects on the Canvas(food, score_board, etc).
     The methods in it handle everything for the game right from instantiating the snakes, score_board to
@@ -271,7 +484,7 @@ class TkinkerCanvas:
             elif 'snake' in self.canvas.gettags(item):
                 self.handle_hit_snake(snake)
                 return 2
-        
+
         self.update_gameState(7)
 
     def handle_hit_snake(self, snake : Snake):
@@ -369,13 +582,13 @@ class TkinkerCanvas:
 
     def recv_msg(self):
         msg = self.s.recv(sizeof(c_char) * 3)
-        msg = msg.decode("utf-8") 
+        msg = msg.decode("utf-8")
         print("[DEBUG] Received msg: {}\n".format(msg))
         return msg
 
     def recv_int(self):
         msg = self.s.recv(sizeof(c_int))
-        int_value = int.from_bytes(msg, "little")    
+        int_value = int.from_bytes(msg, "little")
         print("[DEBUG] Received int: {}\n".format(int_value))
 
         return int_value
@@ -394,7 +607,7 @@ class TkinkerCanvas:
         buff = self.s.recv(sizeof(Recv_control))
         payload_in = Recv_control.from_buffer_copy(buff)
         #print("Received control x={:d}".format(payload_in.x))
-        return payload_in.control0, payload_in.control1 
+        return payload_in.control0, payload_in.control1
 
     def sendCollision(self, signal):
         print("Sending")
@@ -450,18 +663,18 @@ class TkinkerCanvas:
             ############################
             msg = self.recv_msg()
             if msg == "HLD":
-                print("Waiting for other player")   
+                print("Waiting for other player")
             while msg != "STR":
                 msg = self.recv_msg()
                 if msg == "HLD":
-                    print("Waiting for other player")   
+                    print("Waiting for other player")
 
             #intial_data = IntialData(0, 0, 0, 0, 0)
             #print("Sending")
             #nsent = self.s.send(intial_data)
             #print("Sent {:d} bytes".format(nsent))
-            
-            #receive the intitalized data and create snake 
+
+            #receive the intitalized data and create snake
             buff = self.s.recv(sizeof(IntialData))
             payload_in = IntialData.from_buffer_copy(buff)
             print("Received width={:d}, height={:d}, unit={:d}, speed={:d}, id-{:d}".format(payload_in.CANVAS_WIDTH,
@@ -472,7 +685,7 @@ class TkinkerCanvas:
             self.CANVAS_WIDTH = payload_in.CANVAS_WIDTH  # Width of drawing canvas in pixels
             self.CANVAS_HEIGHT = payload_in.CANVAS_HEIGHT  # Height of drawing canvas in pixels
             self.UNIT_SIZE = payload_in.UNIT_SIZE  # Decides how thick the snake is
-            self.SPEED = payload_in.SPEED  # Greater value here increases the speed of motion of the snakes  
+            self.SPEED = payload_in.SPEED  # Greater value here increases the speed of motion of the snakes
             snake_id = payload_in.SNAKE_ID
             self.snakes_init(snake_id)
             ##############################################
@@ -491,7 +704,7 @@ class TkinkerCanvas:
             self.starter_message()
             # The first food is placed outside the loop to kick start the game
             self.place_food(payload_in.x1, payload_in.y1)
-            
+
             #self.place_food_start()
 
             # Animation Loop
@@ -499,18 +712,18 @@ class TkinkerCanvas:
                 # Update World
 
                 #send control signal to server
-                control0, control1 = self.control_detection()            
+                control0, control1 = self.control_detection()
                 #receiv control signal from server
                 #control0, control1 = recv_control_from_server()
                 self.move_snake(self.snake0, control0)
                 self.move_snake(self.snake1, control1)
                 self.snake0.move_snake()
                 self.snake1.move_snake()
-                
+
                 self.canvas.update()
 
                 self.hit_something(self.snake)
-               
+
                 if self.is_col != 0:
                     self.handle_collision()
                 #send hit signal and receive score, game_state
@@ -528,11 +741,59 @@ class TkinkerCanvas:
         finally:
             print("Closing socket")
             self.s.close()
-            
-def main():
-    top = tkinter.Tk()
-    TkinkerCanvas(top)
-    top.mainloop()
-    
+
+def playSnake(game_board):
+    SnakeCanvas(game_board)
+    game_board.mainloop()
+
+# =====================================
+# menu
+def bingo(game_board):
+    game_board.destroy()
+    game_board = tkinter.Tk()
+    game_board.title("Bingo")
+    playBingo(game_board)
+
+
+def snake(game_board):
+    game_board.destroy()
+    game_board = tkinter.Tk()
+    game_board.title("Snake")
+    playSnake(game_board)
+
+# main function
+
+
+def startMenu():
+    menu = tkinter.Tk()
+    menu.geometry("500x500")
+    menu.title("Tic Tac Toe")
+    wpc = partial(bingo, menu)
+    wpl = partial(snake, menu)
+
+    head = tkinter.Button(menu, text="---Welcome to GameCenter---",
+                  activeforeground='red', bg="green",
+                  fg="yellow", width=500, font='summer', bd=5,state=tkinter.DISABLED)
+
+    B1 = tkinter.Button(menu, text="Bingo", command=wpc,
+                activeforeground='red',
+                activebackground="yellow", bg="red",
+                fg="yellow", width=500, font='summer', bd=5)
+
+    B2 = tkinter.Button(menu, text="Snake", command=wpl, activeforeground='red',
+                activebackground="yellow", bg="red", fg="yellow",
+                width=500, font='summer', bd=5)
+
+    B3 = tkinter.Button(menu, text="Exit", command=menu.quit, activeforeground='red',
+                activebackground="yellow", bg="red", fg="yellow",
+                width=500, font='summer', bd=5)
+    head.pack(side='top')
+    B1.pack(side='top')
+    B2.pack(side='top')
+    B3.pack(side='top')
+    menu.mainloop()
+
+
+# Call main function
 if __name__ == '__main__':
-    main()
+    startMenu()

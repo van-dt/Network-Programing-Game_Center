@@ -212,7 +212,7 @@ void update_state(game_state* state, send_data* data){
         }
         else if(data->data_type == 5){
             if(data->snake_id == 0){
-                state->is_alive0 = 0;    
+                state->is_alive0 = 0;
             }
             else state->is_alive1 = 0;
         }
@@ -238,7 +238,7 @@ void* start_game(void *thread_data){
         // bzero(buff, BUFFSIZE);
 
         write_clients_msg(csock, "STR");
-        
+
         //nread=read(csock, buff, BUFFSIZE);
         //printf("\nReceived %d bytes\n", nread);
         intial_game_value *p = (intial_game_value*)malloc(sizeof(intial_game_value));
@@ -272,7 +272,7 @@ void* start_game(void *thread_data){
         // 1. control signal
         // 2. colision detection
         send_datas *data = (send_datas*)malloc(sizeof(send_datas));
-        
+
         data->data_0 = ((send_data*)buff)->data_type;
         data->data_1 = ((send_data*)buff2)->data_type;
         printf("%d-%d",data->data_0, data->data_1);
@@ -328,7 +328,7 @@ int main()
     //ssock = createSocket(PORT);
     ssock = setup_listener(PORT);
     printf("Server listening on port %d\n", PORT);
-   
+
     // while (1)
     // {
     //     csock = accept(ssock, (struct sockaddr *)&client, &clilen);
@@ -366,7 +366,7 @@ int main()
     //     free(f);
     //     bzero(buff, BUFFSIZE);
 
-      
+
     //     // nread=read(csock, buff, BUFFSIZE);
     //     // printf("Sending it back.. ");
     //     // control* c = (control*) buff;
