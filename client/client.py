@@ -139,7 +139,7 @@ class BingoCanvas:
         """
         #
         #receive intial state of the game
-        server_addr, self.s = self.open_socket('localhost', 2301)
+        server_addr, self.s = self.open_socket('', 2301)
         try:
             self.s.connect(server_addr)
             print("Connected to {:s}".format(repr(server_addr)))
@@ -204,8 +204,16 @@ class BingoCanvas:
                 elif msg == "DRW":
                     print("Draw.\n")
                     break
+                elif msg == "DIS":
+                    print("other players had disconnected...\n")
+                    self.label.configure(text="other players had disconnected... :((")
+                    self.draw_board()
+                    break
                 else:
                     print("Unknown message")
+                    self.label.configure(text="Something went wrong with server!! Try again.\n")
+                    self.draw_board()
+                    break
         except AttributeError as ae:
             print("Error creating the socket: {}".format(ae))
         except socket.error as se:
@@ -501,6 +509,15 @@ class SnakeCanvas:
     def handle_hit_wall(self, snake : Snake):
         self.update_gameState(5)
         #snake.is_alive = False
+
+    def handle_disconnect(self):
+        if(self.recv_msg() == 'DIS'):
+            print("a player had disconnected")
+            self.display_label('Other player had disconnected! :((',10)
+            return True
+        else:
+            return False
+
 
     def handle_game_over(self):
         """

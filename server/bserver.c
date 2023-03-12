@@ -394,6 +394,8 @@ void *run_game(void *thread_data)
         }
 
 	    if (move == -1) {
+            write_client_msg(cli_sockfd[0], "DIS");
+            write_client_msg(cli_sockfd[1], "DIS");
             printf("Player disconnected.\n");
             break;
         }

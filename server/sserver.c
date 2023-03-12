@@ -294,8 +294,10 @@ void* start_game(void *thread_data){
             bzero(buff, BUFFSIZE);
             bzero(buff2, BUFFSIZE);
         }
+        // write_clients_msg(csock, "OKI");
         }
         printf("Closing connection to client\n");
+        // write_clients_msg(csock, "DIS");
         printf("----------------------------\n");
         free(state);
         closeSocket(csock[0]);
